@@ -1,12 +1,17 @@
 package pgsql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"github.com/polarismesh/polaris/common/log"
 	"github.com/polarismesh/polaris/plugin"
+	"strings"
 	"time"
 )
+
+// db抛出的异常，需要重试的字符串组
+var errMsg = []string{"Deadlock", "bad connection", "invalid connection"}
 
 // BaseDB 对sql.DB的封装
 type BaseDB struct {
@@ -43,10 +48,7 @@ func NewBaseDB(cfg *dbConfig, parsePwd plugin.ParsePassword) (*BaseDB, error) {
 	return nil, nil
 }
 
-// desc
-// @param
-// @author zhangming
-// @date 2023/5/28-01:46
+// openDatabase 与数据库进行连接
 func (b *BaseDB) openDatabase() error {
 	c := b.cfg
 
@@ -87,4 +89,114 @@ func (b *BaseDB) openDatabase() error {
 	b.DB = db
 
 	return nil
+}
+
+// Exec 重写db.Exec函数 提供重试功能
+func (b *BaseDB) Exec(query string, args ...interface{}) (sql.Result, error) {
+	var (
+		result sql.Result
+		err    error
+	)
+
+	Retry("exec "+query, func() error {
+		result, err = b.DB.Exec(query, args...)
+		return err
+	})
+
+	return result, err
+}
+
+// Query 重写db.Query函数
+func (b *BaseDB) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	var (
+		rows *sql.Rows
+		err  error
+	)
+
+	Retry("query "+query, func() error {
+		rows, err = b.DB.Query(query, args...)
+		return err
+	})
+
+	return rows, err
+}
+
+// Begin 重写db.Begin
+func (b *BaseDB) Begin() (*BaseTx, error) {
+	var (
+		tx     *sql.Tx
+		err    error
+		option *sql.TxOptions
+	)
+
+	if b.isolationLevel > 0 {
+		option = &sql.TxOptions{Isolation: sql.IsolationLevel(b.isolationLevel)}
+	}
+	Retry("begin", func() error {
+		tx, err = b.DB.BeginTx(context.Background(), option)
+		return err
+	})
+
+	return &BaseTx{Tx: tx}, err
+}
+
+// BaseTx 对sql.Tx的封装
+type BaseTx struct {
+	*sql.Tx
+}
+
+// Retry 重试主函数
+// 最多重试20次，每次等待5ms*重试次数
+func Retry(label string, handle func() error) {
+	var (
+		err         error
+		maxTryTimes = 20
+	)
+
+	for i := 1; i <= maxTryTimes; i++ {
+		err = handle()
+		if err == nil {
+			return
+		}
+
+		// 是否重试
+		repeated := false
+		for _, msg := range errMsg {
+			if strings.Contains(err.Error(), msg) {
+				log.Warnf("[Store][database][%s] get error msg: %s. Repeated doing(%d)", label, err.Error(), i)
+				time.Sleep(time.Millisecond * 5 * time.Duration(i))
+				repeated = true
+				break
+			}
+		}
+		if !repeated {
+			return
+		}
+	}
+}
+
+// RetryTransaction 事务重试
+func RetryTransaction(label string, handle func() error) error {
+	var err error
+
+	Retry(label, func() error {
+		err = handle()
+		return err
+	})
+
+	return err
+}
+
+func (b *BaseDB) processWithTransaction(label string, handle func(tx *BaseTx) error) error {
+	tx, err := b.Begin()
+	if err != nil {
+		log.Errorf("[Store][database] %s begin tx err: %s", label, err.Error())
+		return err
+	}
+
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	return handle(tx)
 }
