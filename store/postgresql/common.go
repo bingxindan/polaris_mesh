@@ -156,3 +156,21 @@ func checkDataBaseAffectedRows(result sql.Result, counts ...int64) error {
 	log.Errorf("[Store][Database] get rows affected result(%d) is not match expect(%+v)", n, counts)
 	return store.NewStatusError(store.AffectedRowsNotMatch, "affected rows not matched")
 }
+
+func GetLocation() *time.Location {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		loc = time.FixedZone("CTS", 8*3600)
+	}
+	return loc
+}
+
+// GetCurrentTimeFormat 获取格式化时间
+// @param millTime：时间毫秒
+// @return 2006-01-02 15:04:05
+func GetCurrentTimeFormat() string {
+	loc := GetLocation()
+	currentTime := time.Now().In(loc)
+	format := currentTime.Format("2006-01-02 15:04:05")
+	return format
+}

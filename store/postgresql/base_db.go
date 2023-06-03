@@ -8,6 +8,8 @@ import (
 	"github.com/polarismesh/polaris/plugin"
 	"strings"
 	"time"
+
+	_ "github.com/lib/pq"
 )
 
 // db抛出的异常，需要重试的字符串组
@@ -16,32 +18,26 @@ var errMsg = []string{"Deadlock", "bad connection", "invalid connection"}
 // BaseDB 对sql.DB的封装
 type BaseDB struct {
 	*sql.DB
-	cfg            *dbConfig
-	isolationLevel sql.IsolationLevel
-	parsePwd       plugin.ParsePassword
+	cfg      *dbConfig
+	parsePwd plugin.ParsePassword
 }
 
 // dbConfig store的配置
 type dbConfig struct {
-	dbType           string
-	dbUser           string
-	dbPwd            string
-	dbAddr           string
-	dbPort           string
-	dbName           string
-	maxOpenConns     int
-	maxIdleConns     int
-	connMaxLifetime  int
-	txIsolationLevel int
+	dbType          string
+	dbUser          string
+	dbPwd           string
+	dbAddr          string
+	dbPort          string
+	dbName          string
+	maxOpenConns    int
+	maxIdleConns    int
+	connMaxLifetime int
 }
 
 // NewBaseDB 新建一个BaseDB
 func NewBaseDB(cfg *dbConfig, parsePwd plugin.ParsePassword) (*BaseDB, error) {
 	baseDb := &BaseDB{cfg: cfg, parsePwd: parsePwd}
-	if cfg.txIsolationLevel > 0 {
-		baseDb.isolationLevel = sql.IsolationLevel(cfg.txIsolationLevel)
-		log.Infof("[Store][database] use isolation level: %s", baseDb.isolationLevel.String())
-	}
 
 	if err := baseDb.openDatabase(); err != nil {
 		return nil, err
@@ -130,9 +126,6 @@ func (b *BaseDB) Begin() (*BaseTx, error) {
 		option *sql.TxOptions
 	)
 
-	if b.isolationLevel > 0 {
-		option = &sql.TxOptions{Isolation: sql.IsolationLevel(b.isolationLevel)}
-	}
 	Retry("begin", func() error {
 		tx, err = b.DB.BeginTx(context.Background(), option)
 		return err

@@ -231,9 +231,6 @@ func parseStoreConfig(opts interface{}) (*dbConfig, error) {
 		c.connMaxLifetime = connMaxLifetime
 	}
 
-	if isolationLevel, _ := obj["txIsolationLevel"].(int); isolationLevel > 0 {
-		c.txIsolationLevel = isolationLevel
-	}
 	return c, nil
 }
 
