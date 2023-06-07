@@ -5,6 +5,7 @@ import (
 	"github.com/polarismesh/polaris/common/model"
 	"github.com/polarismesh/polaris/store"
 	"testing"
+	"time"
 )
 
 func initConf() *postgresqlStore {
@@ -24,7 +25,7 @@ func initConf() *postgresqlStore {
 				"connMaxLifetime":  10,
 				"txIsolationLevel": 2,
 			},
-			"slave": map[interface{}]interface{}{
+			/*"slave": map[interface{}]interface{}{
 				"dbType": "postgres",
 				"dbUser": "postgres",
 				"dbPwd":  "aaaaaa",
@@ -36,7 +37,7 @@ func initConf() *postgresqlStore {
 				"maxIdleConns":     10,
 				"connMaxLifetime":  10,
 				"txIsolationLevel": 2,
-			},
+			},*/
 		},
 	}
 	obj := &postgresqlStore{}
@@ -44,6 +45,11 @@ func initConf() *postgresqlStore {
 	fmt.Println(err)
 
 	return obj
+}
+
+func TestNewBaseDB(t *testing.T) {
+	obj := initConf()
+	fmt.Println("obj: ", obj)
 }
 
 func TestCreateTransaction(t *testing.T) {
@@ -58,7 +64,7 @@ func TestAddNamespace(t *testing.T) {
 	obj := initConf()
 
 	modelNamespace := &model.Namespace{
-		Name:    "Test",
+		Name:    "Test1",
 		Comment: "Polaris-test",
 		Token:   "2d1bfe5d12e04d54b8ee69e62494c7fe",
 		Owner:   "polaris",
@@ -69,4 +75,59 @@ func TestAddNamespace(t *testing.T) {
 	err := obj.namespaceStore.AddNamespace(modelNamespace)
 
 	fmt.Printf("namespace: %+v\n", err)
+}
+
+func TestUpdateNamespace(t *testing.T) {
+	obj := initConf()
+
+	modelNamespace := &model.Namespace{
+		Name:    "Test",
+		Comment: "Polaris-test1",
+		Token:   "2d1bfe5d12e04d54b8ee69e62494c7fe",
+		Owner:   "polaris",
+		Valid:   false,
+		//CreateTime time.Time
+		//ModifyTime time.Time
+	}
+	err := obj.namespaceStore.UpdateNamespace(modelNamespace)
+
+	fmt.Printf("namespace: %+v\n", err)
+}
+
+func TestUpdateNamespaceToken(t *testing.T) {
+	obj := initConf()
+
+	err := obj.UpdateNamespaceToken("Test", "2d1bfe5d12e04d54b8ee69e62494c7fr")
+
+	fmt.Printf("response: %+v\n", err)
+}
+
+func TestGetNamespace(t *testing.T) {
+	obj := initConf()
+
+	response, err := obj.GetNamespace("Test")
+
+	fmt.Printf("res: %+v, err: %+v\n", response.Name, err)
+}
+
+func TestGetNamespaces(t *testing.T) {
+	obj := initConf()
+
+	filter := map[string][]string{
+		"name": {"Test", "default"},
+	}
+	response, cnt, err := obj.GetNamespaces(filter, 0, 10)
+
+	fmt.Printf("res: %+v, cnt: %+v, err: %+v\n", response, cnt, err)
+}
+
+func TestGetMoreNamespaces(t *testing.T) {
+	obj := initConf()
+
+	response, err := obj.GetMoreNamespaces(time.Time{})
+
+	for _, resp := range response {
+		fmt.Printf("res: %+v, err: %+v\n", resp.Name, err)
+	}
+
 }

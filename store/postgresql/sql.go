@@ -36,6 +36,7 @@ func boolToInt(v bool) int {
 
 func genNamespaceWhereSQLAndArgs(str string, filter map[string][]string, order *Order, offset, limit int) (string, []interface{}) {
 	num := 0
+	var sqlIndex = 1
 
 	for _, value := range filter {
 		num += len(value)
@@ -58,18 +59,20 @@ func genNamespaceWhereSQLAndArgs(str string, filter map[string][]string, order *
 					str += " or "
 				}
 				if index == OwnerAttribute {
-					str += "owner like ?"
+					str += fmt.Sprintf("owner like $%d", sqlIndex)
 					item = "%" + item + "%"
 				} else {
 					if index == NameAttribute && utils.IsWildName(item) {
-						str += "name like ?"
+						str += fmt.Sprintf("name like $%d", sqlIndex)
 						item = utils.ParseWildNameForSql(item)
 					} else {
-						str += index + "=?"
+						str += index + fmt.Sprintf("=$%d", sqlIndex)
 					}
 				}
 				args = append(args, item)
 				firstItem = false
+
+				sqlIndex++
 			}
 			firstIndex = false
 			str += ")"
@@ -80,8 +83,8 @@ func genNamespaceWhereSQLAndArgs(str string, filter map[string][]string, order *
 		str += " order by " + order.Field + " " + order.Sequence
 	}
 
-	str += " limit ?, ?"
-	args = append(args, offset, limit)
+	str += fmt.Sprintf(" limit $%d offset $%d", sqlIndex, sqlIndex+1)
+	args = append(args, limit, offset)
 
 	return str, args
 }
