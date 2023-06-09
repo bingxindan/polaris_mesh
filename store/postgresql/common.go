@@ -174,3 +174,35 @@ func GetCurrentTimeFormat() string {
 	format := currentTime.Format("2006-01-02 15:04:05")
 	return format
 }
+
+func CurrDiffTimeSecond(beforeTime time.Time) float64 {
+	loc := GetLocation()
+	currentTime := time.Now().In(loc)
+	diff := beforeTime.Sub(currentTime)
+	return diff.Seconds()
+}
+
+func GetCurrentSsTimestamp() int64 {
+	loc := GetLocation()
+	now := time.Now().In(loc)
+	curTime := now.Unix()
+	return curTime
+}
+
+// UnixSecondToTime 秒级时间戳转time
+func UnixSecondToTime(second int64) time.Time {
+	loc := GetLocation()
+	return time.Unix(second, 0).In(loc)
+}
+
+// UnixMilliToTime 毫秒级时间戳转time
+func UnixMilliToTime(milli int64) time.Time {
+	loc := GetLocation()
+	return time.Unix(milli/1000, (milli%1000)*(1000*1000)).In(loc)
+}
+
+// UnixNanoToTime 纳秒级时间戳转time
+func UnixNanoToTime(nano int64) time.Time {
+	loc := GetLocation()
+	return time.Unix(nano/(1000*1000*1000), nano%(1000*1000*1000)).In(loc)
+}
