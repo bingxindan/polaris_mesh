@@ -3,6 +3,7 @@ package postgresql
 import (
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"github.com/polarismesh/polaris/common/log"
 	"github.com/polarismesh/polaris/common/model"
 	"math/big"
@@ -31,7 +32,7 @@ func (t *transaction) Commit() error {
 
 // LockBootstrap 启动锁，限制Server启动的并发数
 func (t *transaction) LockBootstrap(key string, server string) error {
-	countStr := "select count(*) from start_lock where lock_key = ?"
+	countStr := "select count(*) from start_lock where lock_key = $1"
 	var count int
 	if err := t.tx.QueryRow(countStr, key).Scan(&count); err != nil {
 		log.Errorf("[Store][database] lock bootstrap scan count err: %s", err.Error())
@@ -49,8 +50,12 @@ func (t *transaction) LockBootstrap(key string, server string) error {
 	id := int(bid.Int64())%count + 1
 	// innodb_lock_wait_timeout这个global变量表示锁超时的时间，cdb为7200秒
 	log.Infof("[Store][database] update start lock_id: %d, lock_key: %s, lock server: %s", id, key, server)
-	lockStr := "update start_lock set server = ? where lock_id = ? and lock_key = ?"
-	if _, err := t.tx.Exec(lockStr, server, id, key); err != nil {
+	lockStr := "update start_lock set server = $1 where lock_id = $2 and lock_key = $3"
+	stmt, err := t.tx.Prepare(lockStr)
+	if err != nil {
+		return err
+	}
+	if _, err = stmt.Exec(server, id, key); err != nil {
 		log.Errorf("[Store][database] update start lock err: %s", err.Error())
 		t.failed = true
 		return err
@@ -61,13 +66,13 @@ func (t *transaction) LockBootstrap(key string, server string) error {
 
 // LockNamespace 排它锁，锁住指定命名空间
 func (t *transaction) LockNamespace(name string) (*model.Namespace, error) {
-	str := genNamespaceSelectSQL() + " where name = ? and flag != 1 for update"
+	str := genNamespaceSelectSQL() + " where name = $1 and flag != 1"
 	return t.getValidNamespace(str, name)
 }
 
 // RLockNamespace 共享锁，锁住命名空间
 func (t *transaction) RLockNamespace(name string) (*model.Namespace, error) {
-	str := genNamespaceSelectSQL() + " where name = ? and flag != 1 lock in share mode"
+	str := genNamespaceSelectSQL() + " where name = $1 and flag != 1"
 	return t.getValidNamespace(str, name)
 }
 
@@ -77,8 +82,12 @@ func (t *transaction) DeleteNamespace(name string) error {
 		return err
 	}
 
-	str := "update namespace set flag = 1, mtime = sysdate() where name = ?"
-	if _, err := t.tx.Exec(str, name); err != nil {
+	str := "update namespace set flag = 1, mtime = $1 where name = $2"
+	stmt, err := t.tx.Prepare(str)
+	if err != nil {
+		return err
+	}
+	if _, err = stmt.Exec(GetCurrentTimeFormat(), name); err != nil {
 		t.failed = true
 	}
 
@@ -88,14 +97,14 @@ func (t *transaction) DeleteNamespace(name string) error {
 // LockService 排它锁，锁住指定服务
 func (t *transaction) LockService(name string, namespace string) (*model.Service, error) {
 	str := genServiceSelectSQL() +
-		" from service where name = ? and namespace = ? and flag !=1 for update"
+		" from service where name = $1 and namespace = $2 and flag !=1"
 	return t.getValidService(str, name, namespace)
 }
 
 // RLockService 共享锁，锁住指定服务
 func (t *transaction) RLockService(name string, namespace string) (*model.Service, error) {
 	str := genServiceSelectSQL() +
-		" from service where name = ? and namespace = ? and flag !=1 lock in share mode"
+		" from service where name = $1 and namespace = $2 and flag !=1"
 	return t.getValidService(str, name, namespace)
 }
 
@@ -104,16 +113,18 @@ func (t *transaction) BatchRLockServices(ids map[string]bool) (map[string]bool, 
 	str := "select id, flag from service where id in ( "
 	first := true
 	args := make([]interface{}, 0, len(ids))
+	idx := 1
 	for id := range ids {
 		if first {
-			str += "?"
+			str += fmt.Sprintf("$%d", idx)
 			first = false
 		} else {
-			str += ", ?"
+			str += fmt.Sprintf(", $%d", idx)
 		}
+		idx++
 		args = append(args, id)
 	}
-	str += ") and flag != 1 lock in share mode"
+	str += ") and flag != 1"
 	log.Infof("[Store][database] RLock services: %+v", args)
 	rows, err := t.tx.Query(str, args...)
 	if err != nil {
@@ -151,8 +162,12 @@ func (t *transaction) DeleteService(name string, namespace string) error {
 		return err
 	}
 
-	str := "update service set flag = 1, mtime = sysdate() where name = ? and namespace = ?"
-	if _, err := t.tx.Exec(str, name, namespace); err != nil {
+	str := "update service set flag = 1, mtime = $1 where name = $2 and namespace = $3"
+	stmt, err := t.tx.Prepare(str)
+	if err != nil {
+		return err
+	}
+	if _, err = stmt.Exec(GetCurrentTimeFormat(), name, namespace); err != nil {
 		log.Errorf("[Store][database] delete service err: %s", err.Error())
 		t.failed = true
 		return err
@@ -167,8 +182,12 @@ func (t *transaction) DeleteAliasWithSourceID(sourceServiceID string) error {
 		return err
 	}
 
-	str := `update service set flag = 1, mtime = sysdate() where reference = ?`
-	if _, err := t.tx.Exec(str, sourceServiceID); err != nil {
+	str := `update service set flag = 1, mtime = $1 where reference = $2`
+	stmt, err := t.tx.Prepare(str)
+	if err != nil {
+		return err
+	}
+	if _, err := stmt.Exec(GetCurrentTimeFormat(), sourceServiceID); err != nil {
 		log.Errorf("[Store][database] delete service alias err: %s", err.Error())
 		t.failed = false
 		return err

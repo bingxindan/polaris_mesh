@@ -165,7 +165,7 @@ func (p *postgresqlStore) StartTx() (store.Tx, error) {
 }
 
 func buildEtimeStr(enable bool) string {
-	etimeStr := "sysdate()"
+	etimeStr := GetCurrentTimeFormat()
 	if !enable {
 		etimeStr = emptyEnableTime
 	}

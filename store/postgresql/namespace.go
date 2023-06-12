@@ -33,7 +33,7 @@ func (ns *namespaceStore) AddNamespace(namespace *model.Namespace) error {
 			stmt, err := tx.Prepare(str)
 			if err != nil {
 				log.Errorf("[Store][database] insert prepare[%v] commit tx err: %s", namespace, err.Error())
-				return err
+				return store.Error(err)
 			}
 
 			if _, err := stmt.Exec(namespace.Name, namespace.Comment, namespace.Token, namespace.Owner, GetCurrentTimeFormat(), GetCurrentTimeFormat()); err != nil {
@@ -60,7 +60,7 @@ func (ns *namespaceStore) UpdateNamespace(namespace *model.Namespace) error {
 		return ns.master.processWithTransaction("updateNamespace", func(tx *BaseTx) error {
 			stmt, err := tx.Prepare("update namespace set owner = $1, comment = $2, mtime = $3 where name = $4")
 			if err != nil {
-				return err
+				return store.Error(err)
 			}
 
 			if _, err := stmt.Exec(namespace.Owner, namespace.Comment, GetCurrentTimeFormat(), namespace.Name); err != nil {

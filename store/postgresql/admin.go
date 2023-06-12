@@ -103,7 +103,7 @@ func (l *leaderElectionStore) CompareAndSwapVersion(key string, curVersion int64
 
 		stmt, err := tx.Prepare("update leader_election set leader = $1, version = $2 where elect_key = $3 and version = $4")
 		if err != nil {
-			return err
+			return store.Error(err)
 		}
 		result, err := stmt.Exec(leader, newVersion, key, curVersion)
 		if err != nil {
@@ -465,7 +465,7 @@ func (m *adminStore) BatchCleanDeletedInstances(timeout time.Duration, batchSize
 	err := m.master.processWithTransaction("batchCleanDeletedInstances", func(tx *BaseTx) error {
 		stmt, err := tx.Prepare("delete from instance where id in (select id from instance where flag = 1 and mtime <= $1 limit $2)")
 		if err != nil {
-			return err
+			return store.Error(err)
 		}
 
 		diffTime := GetCurrentSsTimestamp() - int64(timeout.Seconds())
@@ -533,7 +533,7 @@ func (m *adminStore) BatchCleanDeletedClients(timeout time.Duration, batchSize u
 	err := m.master.processWithTransaction("batchCleanDeletedClients", func(tx *BaseTx) error {
 		stmt, err := tx.Prepare("delete from client where id in (select id from client where flag = 1 and mtime <= $1 limit $2)")
 		if err != nil {
-			return err
+			return store.Error(err)
 		}
 
 		diffTime := GetCurrentSsTimestamp() - int64(timeout.Seconds())

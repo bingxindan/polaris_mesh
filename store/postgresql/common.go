@@ -10,16 +10,6 @@ import (
 	"unicode"
 )
 
-// timeToTimestamp 转时间戳（秒）
-// 由于 FROM_UNIXTIME 不支持负数，所以小于0的情况赋值为 1
-func timeToTimestamp(t time.Time) int64 {
-	ts := t.Unix()
-	if ts < 0 {
-		ts = 1
-	}
-	return ts
-}
-
 func toUnderscoreName(name string) string {
 	var buf bytes.Buffer
 	for i, token := range name {
@@ -205,4 +195,9 @@ func UnixMilliToTime(milli int64) time.Time {
 func UnixNanoToTime(nano int64) time.Time {
 	loc := GetLocation()
 	return time.Unix(nano/(1000*1000*1000), nano%(1000*1000*1000)).In(loc)
+}
+
+// ConvertSecond 转换指定时间的毫秒
+func ConvertSecond(ctime time.Time) int64 {
+	return ctime.In(GetLocation()).Unix()
 }
